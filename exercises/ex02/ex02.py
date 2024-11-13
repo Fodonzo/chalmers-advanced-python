@@ -10,17 +10,25 @@ def convert_value(s):
     return converted
 
 def tsv2list(file):
-    with open(file) as tsv:
+    with open(file, encoding='utf-8') as tsv:
         dictlist = list(csv.DictReader(tsv, delimiter="\t"))
     for dict in dictlist:
         for (key,val) in dict.items():
             dict[key] = convert_value(val)
     return dictlist
 
+#data = tsv2list("exercises/ex02/countries.tsv")
+#print(data)
+
 # Question 2
 
 def tsv2dict(file, key=None):
     dictlist = tsv2list(file)
+
+    if not dictlist:
+        print("The file is empty or could not be read.")
+        return None
+
     if not key:
         return dictlist
     else:
@@ -38,9 +46,12 @@ def tsv2dict(file, key=None):
                     nested_dict[keyval] = dict
     return nested_dict
 
+#data = tsv2dict("exercises/ex02/countries.tsv", "country")
+#print(data)
+
 # Question 3
 
-import json # https://docs.python.org/3/library/json.html
+import json  # https://docs.python.org/3/library/json.html
 
 def data2json(data, file):
     with open(file, 'w') as f:
@@ -51,10 +62,22 @@ def json2data(file):
         return json.load(f)
 
 def test_json_data(file, key=None):
-    obj = tsv2dict(file, key)
-    json_path = "countries.json"
+    print(f"Attempting to open file at: {file}")
+    try:
+        obj = tsv2dict(file, key)
+    except FileNotFoundError:
+        print(f"File {file} not found.")
+        return False
+
+    if obj is None:
+        return False  # Handle case where tsv2dict returns None
+
+    json_path = "exercises/ex02/countries.json"  # Save JSON data with .json extension
     data2json(obj, json_path)
     return json2data(json_path) == obj
+
+#data = test_json_data("exercises/ex02/countries.tsv", "country")
+#print(data)
 
 
 # Question 4

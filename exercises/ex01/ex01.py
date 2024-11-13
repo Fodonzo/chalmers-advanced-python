@@ -2,42 +2,41 @@
 
 def norway_pandemic():
     region = input("Hvor er du bosatt? ")
-    if region[0] == "V" or region[1] == "V":
-        # bonus: try to avoid repetition by writing a function that handles 
-        # all yes/no questions
+    if region.startswith("V"):
         print("Velkommen til Norge!")
         return
-    vaccine = input("Er du fullvaksinert?")
-    if vaccine == "ja":
+    if yes_or_no("Er du fullvaksinert?") or yes_or_no("Har du gjennomgått koronasykdom de siste seks månedene?"):
         print("Velkommen til Norge!")
-        return
-    covid = input("Har du gjennomgått koronasykdom de siste seks månedene?")
-    if covid == "ja":
-        print("Velkommen til Norge!")
-        return
     else:
-        print("Velkommen til Norge, men du må teste deg och sitte i karantene.")
+        print("Velkommen til Norge, men du må teste deg og sitte i karantene.")
+
+def yes_or_no(input_question):
+    answer = input(input_question).strip().lower()
+    return answer == "ja"
 
 # Question 2
 
-def price(drinks):
-    prices = [("kaffe", 30), ("öl", 50), ("kola", 25)]
-    [n, name] = drinks.split()
-    for (s, price) in prices:
-        if s == name:
-            return price * int(n)
-    return 0
+def price(drink_order):
+    price_dictionary = {"kaffe": 30, "öl": 50, "kola": 25}
+    quantity, drink = drink_order.split(" ")
+
+    return price_dictionary.get(drink, 0) * int(quantity)
+
 
 def get_order():
-    drink = input("Vad vill ni dricka?")
-    total = 0
-    while drink != "Det är bra så":
-        p = price(drink)
-        if p == 0:
-            print("Finns tyvärr inte")
-        total += p
-        drink = input("Något mer?")
-    print("Det blir", total, "kronor")
+    total_cost = 0
+    while True:
+        order = input("Vad vill ni dricka? (Skriv 'Det är bra så' för att avsluta): ")
+        if order == "Det är bra så":
+            break
+
+        item_price = price(order)
+        if item_price == 0:
+            print("Finns inte på menyn")
+        else:
+            total_cost += item_price
+
+    print("Det blir", total_cost, "kronor")
 
 # Question 3
 
@@ -65,23 +64,16 @@ edges = [(0,1), (1,2), (2,0), (2,3)]
 
 def edges2adjacency(edges):
     d = {}
-    # bonus: try to make this for loop more compact
-    for (src, trg) in edges:
-        if src in d:
-            d[src].append(trg)
-        else:
-            d[src] = [trg]
-        if trg in d:
-            d[trg].append(src)
-        else:
-            d[trg] = [src]
+    for src, trg in edges:
+        d.setdefault(src, []).append(trg)
+        d.setdefault(trg, []).append(src)
     return d
 
-# bonus: try to do this with a single list comprehension
+print(edges2adjacency(edges))
+
 def adjacency2edges(adj):
-    edges = []
-    for (src, trgs) in adj.items():
-        for trg in trgs:
-            if (src,trg) not in edges and (trg,src) not in edges:
-                edges.append((src,trg))
-    return edges
+    return [(src, trg) for src, trgs in adj.items() for trg in trgs if src < trg]
+
+adj = edges2adjacency(edges)
+
+print(adjacency2edges(adj))
