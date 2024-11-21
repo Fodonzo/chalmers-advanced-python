@@ -86,7 +86,7 @@ def lines_via_stop(linedict, stop):
     stops_at_stop = []
 
     for line_number, stops in linedict.items():
-        if stop in stops:
+        if stop.lower() in [s.lower() for s in stops]:
             stops_at_stop.append(line_number)
 
     stops_at_stop.sort()
@@ -94,97 +94,134 @@ def lines_via_stop(linedict, stop):
     return stops_at_stop
 
 
+
 def lines_between_stops(linedict, stop1, stop2):
+    stop1 = stop1.lower()
+    stop2 = stop2.lower()
 
     lines_that_pass_both_stops = []
 
     for line_number, stops in linedict.items():
-        if stop1 in stops and stop2 in stops:
-            index1 = stops.index(stop1)
-            index2 = stops.index(stop2)
+        stops_lower = [s.lower() for s in stops]
 
-            if abs(index1 - index2) == 1:
-                lines_that_pass_both_stops.append(int(line_number))
+        if stop1 in stops_lower and stop2 in stops_lower:
+            index1 = stops_lower.index(stop1)
+            index2 = stops_lower.index(stop2)
+
+            if index1 is not None and index2 is not None:
+                lines_that_pass_both_stops.append(line_number)
 
     lines_that_pass_both_stops.sort()
-    return [str(line) for line in lines_that_pass_both_stops]
+
+    return lines_that_pass_both_stops
 
 
 def time_between_stops(linedict, timedict, line, stop1, stop2):
-
     if line not in linedict:
         return f"Line {line} not found in linedict"
 
     stops = linedict[line]
 
-    if stop1 not in stops or stop2 not in stops:
-        return f"Stops {stop1} and/or {stop2} are not on line {line}"
+    stop1 = stop1.lower()
+    stop2 = stop2.lower()
+
+    if stop1 not in [s.lower() for s in stops]:
+        return f"Stop {stop1} not found on line {line}"
+    if stop2 not in [s.lower() for s in stops]:
+        return f"Stop {stop2} not found on line {line}"
 
     if stop1 == stop2:
         return 0
 
-    index1 = stops.index(stop1)
-    index2 = stops.index(stop2)
+    try:
+        index1 = next(i for i, s in enumerate(stops) if s.lower() == stop1)
+        index2 = next(i for i, s in enumerate(stops) if s.lower() == stop2)
+        print(f"Indices - Stop1: {index1}, Stop2: {index2}")  # Debugging line
+    except ValueError as e:
+        return f"Error finding stops: {e}"
 
     if index1 < index2:
-        path = stops[index1:index2]
+        path = stops[index1:index2 + 1]
     else:
-        path = stops[index1:index2-1]
-
+        path = stops[index2:index1 + 1][::-1]
 
     total_time = 0
-
-    for i in range(len(path)-1):
+    for i in range(len(path) - 1):
         current_stop = path[i]
-        next_stop = path[i+1]
+        next_stop = path[i + 1]
 
         if next_stop in timedict[current_stop]:
-            total_time += timedict[current_stop][next_stop]
+            transition_time = timedict[current_stop][next_stop]
+            total_time += transition_time
         else:
-            return f"Stop {current_stop} not on line {line}"
+            return f"No time data between {current_stop} and {next_stop}"
 
     return total_time
 
-from haversine import haversine
+from haversine import haversine, Unit
 
 def distance_between_stops(stopdict, stop1, stop2):
-    if stop1 not in stopdict or stop2 not in stopdict:
-        return f"{stop1} and/or {stop2} are not found in stopdict"
+    stop1 = stop1.strip().lower()
+    stop2 = stop2.strip().lower()
 
-    coord1 = stopdict[stop1]
-    coord2 = stopdict[stop2]
+    stops_normalized = {key.strip().lower(): key for key in stopdict.keys()}
 
-    if not (isinstance(coord1, (list, tuple)) and isinstance(coord2, (list, tuple))):
-        return f"Coordinates for {stop1} or {stop2} are not valid"
+    if stop1 not in stops_normalized or stop2 not in stops_normalized:
+        return f"{stop1.capitalize()} and/or {stop2.capitalize()} are not found in stopdict"
+
+    original_stop1 = stops_normalized[stop1]
+    original_stop2 = stops_normalized[stop2]
+
+    coord1 = stopdict[original_stop1]
+    coord2 = stopdict[original_stop2]
+
+    if not all(
+        isinstance(coord, dict) and "lat" in coord and "lon" in coord
+        for coord in [coord1, coord2]
+    ):
+        return f"Invalid coordinates for {original_stop1} or {original_stop2}. Expected format: {{'lat': <value>, 'lon': <value>}}"
 
     if stop1 == stop2:
         return 0
 
-    return haversine(coord1, coord2)
+    distance = haversine(
+        (coord1["lat"], coord1["lon"]),
+        (coord2["lat"], coord2["lon"]),
+        unit=Unit.KILOMETERS
+    )
+
+    return distance
 
 
 def answer_query(tramdict, query):
-    linedict = tramdict['linedict']
-    timedict = tramdict['timedict']
-    stopdict = tramdict['stopdict']
+    linedict = tramdict['lines']
+    timedict = tramdict['times']
+    stopdict = tramdict['stops']
 
     query = query.strip().lower()
 
     try:
         if query.startswith("lines via"):
-            stop = query.split("via", 1)[1].strip()
+            stop = query.split("via", 1)[1].strip().lower()
             return lines_via_stop(linedict, stop)
 
         elif query.startswith("lines between"):
             _, stops = query.split("between", 1)
             stop1, stop2 = map(str.strip, stops.split("and"))
+            stop1 = stop1.lower()
+            stop2 = stop2.lower()
             return lines_between_stops(linedict, stop1, stop2)
 
         elif query.startswith("time between"):
-            parts = query.split("on line")
-            stops_part = parts[0].split("between", 1)[1].strip()
-            stop1, stop2 = map(str.strip, stops_part.split("and"))
-            line = parts[1].strip()
+            parts = query.split("between", 1)
+            stops_part = parts[1].split("on line")
+
+            stop1, stop2 = map(str.strip, stops_part[0].split("and"))
+            line = stops_part[1].strip()
+
+            stop1 = stop1.lower()
+            stop2 = stop2.lower()
+
             return time_between_stops(linedict, timedict, line, stop1, stop2)
 
         elif query.startswith("distance between"):
@@ -193,42 +230,45 @@ def answer_query(tramdict, query):
             return distance_between_stops(stopdict, stop1, stop2)
 
         else:
+            print("Query not recognized.")  # Debugging line
             return False
 
-    except Exception:
-        return False
-
-
-
+    except Exception as e:
+        print(f"Error processing query: {e}")  # Debugging line
+        return f"Error: {str(e)}"
 
 def dialogue(tramfile):
-    tramdict = {
-        "linedict": {},
-        "timedict": {},
-        "stopdict": {}
-    }
+    try:
+        with open(tramfile, 'r', encoding='utf-8') as file:
+            tramdict = json.load(file)
 
-    with open(tramfile, 'r', encoding='utf-8') as file:
-        tramdict = json.load(file)
+        print("Welcome to the Tram System. Type your query or 'quit' to exit.")
 
-    print("Welcome to the Tram System. Type your query or 'quit' to exit.")
+        while True:
+            query = input("Enter your query: ").strip()
 
-    while True:
-        query = input("Enter your query: ").strip()
+            if query.lower() == 'quit':
+                print("Goodbye!")
+                break
 
-        if query.lower() == 'quit':
-            print("Goodbye!")
-            break
+            result = answer_query(tramdict, query)
+            if result is False:
+                print("I couldn't understand your query. Please try again.")
+            else:
+                print("Result:", result)
 
-        result = answer_query(tramdict, query)
-        if result is False:
-            print("I couldn't understand your query. Please try again.")
-        else:
-            print("Result:", result)
+    except FileNotFoundError:
+        print(f"Error: Could not find file {tramfile}. Please ensure the tram network is initialized.")
 
 
-    if __name__ == '__main__':
-        if sys.argv[1:] == ['init']:
-            build_tram_network("tramlines.txt", "tramstops.json")
-        else:
-            dialogue("tramnetwork.json")
+if __name__ == '__main__':
+    if len(sys.argv) > 1 and sys.argv[1] == 'init':
+        print("Initializing tram network...")
+        build_tram_network(
+            "C:/Users/fredr/PycharmProjects/chalmers-advanced-python/labs/lab1/tramstops.json",
+            "C:/Users/fredr/PycharmProjects/chalmers-advanced-python/labs/lab1/tramlines.txt"
+        )
+
+        print("Tram network initialized. Exiting.")
+    else:
+        dialogue("C:/Users/fredr/PycharmProjects/chalmers-advanced-python/labs/lab1/tramnetwork.json")
