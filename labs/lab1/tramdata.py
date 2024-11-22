@@ -18,7 +18,6 @@ def build_tram_stops(jsonobject):
 
     return stops_dict
 
-
 def build_tram_lines(linefile):
     line_dict = {}
     time_dict = {}
@@ -67,7 +66,6 @@ def build_tram_lines(linefile):
 
     return line_dict, time_dict
 
-
 def build_tram_network(stopfile, linefile):
 
     stops_dict = build_tram_stops(stopfile)
@@ -83,17 +81,8 @@ def build_tram_network(stopfile, linefile):
         json.dump(tram_network, outfile, ensure_ascii=False, indent=4)
 
 def lines_via_stop(linedict, stop):
-    stops_at_stop = []
-
-    for line_number, stops in linedict.items():
-        if stop.lower() in [s.lower() for s in stops]:
-            stops_at_stop.append(line_number)
-
-    stops_at_stop.sort()
-
-    return stops_at_stop
-
-
+    lines = [line for line, stops in linedict.items() if stop in map(str.lower, stops)]
+    return sorted(lines, key=lambda x: int(x))
 
 def lines_between_stops(linedict, stop1, stop2):
     stop1 = stop1.lower()
