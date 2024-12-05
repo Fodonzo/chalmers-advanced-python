@@ -1,5 +1,6 @@
 from graphs import WeightedGraph
 import json
+from graphviz import Digraph
 
 class TramStop:
     def __init__(self, name, position=None, lines=None):
@@ -54,9 +55,7 @@ class TramNetwork(WeightedGraph):
         self.lines[line.get_name()] = line
         stops = line.get_stops()
         for i in range(len(stops) - 1):
-            # Add the edge first
             self.add_edge(stops[i].get_name(), stops[i + 1].get_name())
-            # Set the weight
             self.set_weight(stops[i].get_name(), stops[i + 1].get_name(), 1)
 
     def set_transition_time(self, stop_a, stop_b, time):
@@ -105,11 +104,11 @@ def build_tram_network(json_file="tramnetwork.json"):
 
     # Add lines and their respective stops
     for line_name, stops in data["lines"].items():
-        line = TramLine(name=f"Line {line_name}")  # Add "Line " prefix
+        line = TramLine(name=f"Line {line_name}")
         for stop_name in stops:
             stop = tram_network.stops[stop_name]
             line.add_stop(stop)
-            stop.add_line(f"Line {line_name}")  # Add the prefixed name to the stop
+            stop.add_line(f"Line {line_name}")
         tram_network.add_line(line)
 
     # Add transition times between stops
@@ -120,9 +119,31 @@ def build_tram_network(json_file="tramnetwork.json"):
     return tram_network
 
 
+def export_to_graphviz(network, filename="tram_network"):
+    """
+    Exports the tram network to a Graphviz DOT file for visualization.
+    """
+    dot = Digraph(name=filename, format="png")
+
+    # Add nodes (stops)
+    for stop_name in network.list_all_stops():
+        dot.node(stop_name)
+
+    # Add edges (connections between stops)
+    for stop_a, stop_b in network.edges():
+        weight = network.get_weight(stop_a, stop_b)
+        dot.edge(stop_a, stop_b, label=str(weight))
+
+    # Save and render the graph
+    dot.render(filename, view=True)
+    print(f"Graph exported to {filename}.dot and rendered.")
+
 
 # Example Usage
 if __name__ == "__main__":
     network = build_tram_network()
     print("Tram network loaded with stops:", network.list_all_stops())
     print("And lines:", network.list_all_lines())
+
+    # Export the network to Graphviz
+    export_to_graphviz(network, filename="tram_network")
