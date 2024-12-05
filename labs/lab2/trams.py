@@ -1,7 +1,5 @@
-import networkx as nx
-import matplotlib.pyplot as plt
-from tramdata import read_json_data, geographical_distance  # Replace with actual imports from Lab 1
-from graphs import WeightedGraph  # Replace with your implementation from Lab 2
+from graphs import WeightedGraph
+import json
 
 class TramStop:
     def __init__(self, name, position=None, lines=None):
@@ -56,19 +54,14 @@ class TramNetwork(WeightedGraph):
         self.lines[line.get_name()] = line
         stops = line.get_stops()
         for i in range(len(stops) - 1):
-            self.add_edge(stops[i].get_name(), stops[i + 1].get_name(), 1)
-
-    def get_stop_position(self, stop_name):
-        return self.stops[stop_name].get_position()
+            # Add the edge first
+            self.add_edge(stops[i].get_name(), stops[i + 1].get_name())
+            # Set the weight
+            self.set_weight(stops[i].get_name(), stops[i + 1].get_name(), 1)
 
     def set_transition_time(self, stop_a, stop_b, time):
-        self.add_edge(stop_a, stop_b, time)
-
-    def list_lines_through_stop(self, stop_name):
-        return self.stops[stop_name].get_lines()
-
-    def list_stops_along_line(self, line_name):
-        return [stop.get_name() for stop in self.lines[line_name].get_stops()]
+        self.add_edge(stop_a, stop_b)
+        self.set_weight(stop_a, stop_b, time)
 
     def list_all_stops(self):
         return list(self.stops.keys())
@@ -76,82 +69,60 @@ class TramNetwork(WeightedGraph):
     def list_all_lines(self):
         return list(self.lines.keys())
 
-    def extreme_positions(self):
-        latitudes = [stop.get_position()[0] for stop in self.stops.values()]
-        longitudes = [stop.get_position()[1] for stop in self.stops.values()]
-        return min(latitudes), max(latitudes), min(longitudes), max(longitudes)
+    def lines_via_stop(self, stop_name):
+        stop = self.stops.get(stop_name)
+        if not stop:
+            raise KeyError(f"Stop {stop_name} does not exist in the network.")
+        return stop.get_lines()
+
+    def lines_between_stops(self, stop_a, stop_b):
+        if stop_a not in self.stops or stop_b not in self.stops:
+            raise KeyError(f"One or both stops {stop_a}, {stop_b} do not exist in the network.")
+        lines_a = set(self.stops[stop_a].get_lines())
+        lines_b = set(self.stops[stop_b].get_lines())
+        return list(lines_a & lines_b)
+
+    def time_between_stops(self, stop_a, stop_b):
+        if not self.has_edge(stop_a, stop_b):
+            raise ValueError(f"No direct connection exists between {stop_a} and {stop_b}.")
+        return self.get_weight(stop_a, stop_b)
 
 
-def readTramNetwork(tramfile="tramnetwork.json"):
-    data = read_json_data(tramfile)  # Replace with your implementation from Lab 1
+def build_tram_network(json_file="tramnetwork.json"):
+    """
+    Constructs a TramNetwork object from a JSON file.
+    """
+    with open(json_file, 'r', encoding='utf-8') as file:
+        data = json.load(file)
+
     tram_network = TramNetwork()
 
+    # Add stops to the network
     for stop_name, stop_data in data["stops"].items():
-        position = tuple(stop_data["position"])
+        position = (stop_data["lat"], stop_data["lon"])
         stop = TramStop(name=stop_name, position=position)
         tram_network.add_stop(stop)
 
-    for line_name, line_data in data["lines"].items():
-        line = TramLine(name=line_name)
-        for stop_name in line_data["stops"]:
-            line.add_stop(tram_network.stops[stop_name])
+    # Add lines and their respective stops
+    for line_name, stops in data["lines"].items():
+        line = TramLine(name=f"Line {line_name}")  # Add "Line " prefix
+        for stop_name in stops:
+            stop = tram_network.stops[stop_name]
+            line.add_stop(stop)
+            stop.add_line(f"Line {line_name}")  # Add the prefixed name to the stop
         tram_network.add_line(line)
 
-    for (stop_a, stop_b), time in data["times"].items():
-        tram_network.set_transition_time(stop_a, stop_b, time)
+    # Add transition times between stops
+    for stop_a, connections in data["times"].items():
+        for stop_b, time in connections.items():
+            tram_network.set_transition_time(stop_a, stop_b, time)
 
     return tram_network
 
 
-def is_connected(graph):
-    if not graph.get_vertices():
-        return True
 
-    start = next(iter(graph.get_vertices()))
-    visited = set()
-    queue = [start]
-
-    while queue:
-        current = queue.pop(0)
-        if current not in visited:
-            visited.add(current)
-            for neighbor in graph.get_neighbors(current):
-                if neighbor not in visited:
-                    queue.append(neighbor)
-
-    return len(visited) == len(graph.get_vertices())
-
-
-def view_shortest(graph, start, end):
-    nx_graph = nx.DiGraph()
-    for edge, weight in graph.get_edges():
-        nx_graph.add_edge(edge[0], edge[1], weight=weight)
-
-    try:
-        shortest_path = nx.shortest_path(nx_graph, source=start, target=end, weight="weight")
-        print(f"Shortest path from {start} to {end}: {shortest_path}")
-
-        pos = nx.spring_layout(nx_graph)
-        nx.draw(nx_graph, pos, with_labels=True, node_color="lightblue", edge_color="gray")
-        path_edges = list(zip(shortest_path, shortest_path[1:]))
-        nx.draw_networkx_edges(nx_graph, pos, edgelist=path_edges, edge_color="red", width=2)
-        plt.show()
-
-    except nx.NetworkXNoPath:
-        print(f"No path found between {start} and {end}")
-
-
-def demo():
-    G = readTramNetwork()
-    print("Checking network connectedness...")
-    if is_connected(G):
-        print("The tram network is connected.")
-    else:
-        print("The tram network is not connected.")
-
-    a, b = input("from,to: ").split(",")
-    view_shortest(G, a.strip(), b.strip())
-
-
+# Example Usage
 if __name__ == "__main__":
-    demo()
+    network = build_tram_network()
+    print("Tram network loaded with stops:", network.list_all_stops())
+    print("And lines:", network.list_all_lines())

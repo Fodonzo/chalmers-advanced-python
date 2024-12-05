@@ -4,6 +4,7 @@ from graphviz import Digraph
 
 import networkx as nx
 
+
 class Graph(nx.Graph):
     def __init__(self, edgelist=None):
         """
@@ -74,121 +75,25 @@ class Graph(nx.Graph):
         return self.number_of_nodes()
 
 
-
 class WeightedGraph(Graph):
     def __init__(self, edgelist=[]):
-        super().__init__(edgelist)
+        super().__init__()
         self.weights = {}
 
+        # Add edges and weights
         for edge in edgelist:
-            if len(edge) == 3:  # Ensure weights are provided
-                self.weights[(edge[0], edge[1])] = edge[2]
-
-    def get_weight(self, a, b):
-        if (a, b) not in self._edges:  # Assuming self._edges stores edges
-            return None
-        return self._weights.get((a, b), None)  # self._weights stores edge weights
-
-    def set_weight(self, a, b, w):
-        if (a, b) in self.edges():
-            self.weights[(a, b)] = w
-        else:
-            raise ValueError("Edge does not exist")
-
-
-
-def dijkstra(graph, source, cost=lambda u, v: 1):
-    distances = {vertex: float('inf') for vertex in graph.vertices()}
-    distances[source] = 0
-    priority_queue = [(0, source)]  # (distance, vertex)
-    predecessors = {vertex: None for vertex in graph.vertices()}  # To reconstruct paths
-
-    while priority_queue:
-        current_distance, current_vertex = heapq.heappop(priority_queue)
-
-        # Skip if we've already found a shorter path
-        if current_distance > distances[current_vertex]:
-            continue
-
-        for neighbor in graph.neighbours(current_vertex):
-            new_distance = current_distance + cost(current_vertex, neighbor)
-            if new_distance < distances[neighbor]:
-                distances[neighbor] = new_distance
-                predecessors[neighbor] = current_vertex
-                heapq.heappush(priority_queue, (new_distance, neighbor))
-
-    return distances, predecessors  # Returns shortest distances and the path tree
-
-def visualize(graph, view='dot', name='mygraph', nodecolors={}, engine='dot'):
-    dot = Digraph(name, engine=engine)
-    dot.attr(rankdir='LR')  # Optional: set layout direction
-
-    # Add nodes
-    for vertex in graph.vertices():
-        color = nodecolors.get(vertex, 'white')
-        dot.node(vertex, style='filled', fillcolor=color)
-    def __init__(self, edgelist=None):
-        self._adjacency = {}
-        if edgelist:
-            for start, end in edgelist:
-                self.add_edge(start, end)
-
-    def __len__(self):
-        return len(self._adjacency)
-
-    def add_vertex(self, v):
-        if v not in self._adjacency:
-            self._adjacency[v] = []
-
-    def add_edge(self, a, b):
-        if a not in self._adjacency:
-            self.add_vertex(a)
-        if b not in self._adjacency:
-            self.add_vertex(b)
-        self._adjacency[a].append(b)
-
-    def edges(self):
-        return [(v, u) for v in self._adjacency for u in self._adjacency[v]]
-
-    def vertices(self):
-        return list(self._adjacency.keys())
-
-    def neighbours(self, v):
-        return self._adjacency.get(v, [])
-
-    def remove_vertex(self, v):
-        if v in self._adjacency:
-            del self._adjacency[v]
-            for neighbours in self._adjacency.values():
-                if v in neighbours:
-                    neighbours.remove(v)
-
-    def remove_edge(self, a, b):
-        if a in self._adjacency and b in self._adjacency[a]:
-            self._adjacency[a].remove(b)
-
-    def set_vertex_value(self, v, x):
-        if v in self._adjacency:
-            self._adjacency[v] = x
-
-    def get_vertex_value(self, v):
-        return self._adjacency.get(v, [])
-
-
-class WeightedGraph(Graph):
-    def __init__(self, edgelist=[]):
-        super().__init__(edgelist)
-        self.weights = {}
-
-        for edge in edgelist:
-            if len(edge) == 3:  # Ensure weights are provided
-                self.weights[(edge[0], edge[1])] = edge[2]
+            if len(edge) == 3:  # Edge with a weight
+                self.add_edge(edge[0], edge[1])
+                self.set_weight(edge[0], edge[1], edge[2])
+            elif len(edge) == 2:  # Edge without a weight
+                self.add_edge(edge[0], edge[1])
 
     def get_weight(self, vertex1, vertex2):
         """
         Get the weight of the edge between vertex1 and vertex2.
+        Return None if no weight exists.
         """
-        return self[vertex1][vertex2].get("weight", None)
+        return self[vertex1][vertex2].get("weight", None) if self.has_edge(vertex1, vertex2) else None
 
     def set_weight(self, vertex1, vertex2, weight):
         """
@@ -205,74 +110,97 @@ def costs2attributes(G, cost, attr='weight'):
         G[a][b][attr] = cost(a, b)
 
 
-def dijkstra(graph, source, cost=lambda u, v: 1):
+def dijkstra(graph, source, cost=None):
     """
     Compute shortest paths from the source vertex to all other vertices.
     """
-    # Apply the cost function to graph edges as weights
-    costs2attributes(graph, cost)
+    # Apply the cost function to all edges
+    for u, v in graph.edges():
+        graph[u][v]['weight'] = cost(u, v) if cost else graph.get_weight(u, v)
 
-    # Use NetworkX's shortest_path function
+    # Compute shortest paths using NetworkX
     paths = nx.shortest_path(graph, source=source, weight='weight')
 
-    # Sort the paths as lists of vertices
     return {target: paths[target] for target in paths}
 
 
-def visualize(graph, view='dot', name='mygraph', nodecolors=None):
+
+def visualize(graph, view='dot', name='mygraph', nodecolors=None, edgecolors=None, edgelabels=None):
     """
     Visualize the graph using graphviz.
+
+    Parameters:
+    - graph: The graph object to visualize.
+    - view: The output format (e.g., 'pdf', 'png').
+    - name: The output filename.
+    - nodecolors: Dictionary mapping nodes to colors.
+    - edgecolors: Dictionary mapping edges to colors.
+    - edgelabels: Dictionary mapping edges to labels.
     """
     dot = Digraph(name=name, format=view)
 
-    # Add nodes
+    # Add nodes with optional coloring
     for node in graph.nodes:
         color = nodecolors.get(str(node), "white") if nodecolors else "white"
         dot.node(str(node), color=color, style="filled")
 
-    # Add edges
+    # Add edges with optional coloring and labels
     for edge in graph.edges:
-        dot.edge(str(edge[0]), str(edge[1]))
+        edge_color = edgecolors.get((str(edge[0]), str(edge[1])), "black") if edgecolors else "black"
+        label = edgelabels.get((str(edge[0]), str(edge[1])), "") if edgelabels else ""
+        dot.edge(str(edge[0]), str(edge[1]), color=edge_color, label=label)
 
     # Render graph
-    dot.render(name, view=True)
-
-def view_shortest(G, source, target, cost=lambda u, v: 1):
-    path = dijkstra(G, source, cost)[target]
-    print(path)
-    colormap = {str(v): 'orange' for v in path}
-    visualize(G, view='dot', nodecolors=colormap)
+    dot.render(name, view=False)
+    print(f"Graph saved as {name}.gv")
 
 
+class TestGraph:
+    def __init__(self):
+        """
+        Placeholder for tests that validate the functionality of the Graph class.
+        """
+        pass
 
-import unittest
+    def test_vertices(self):
+        """
+        Test adding and retrieving vertices.
+        """
+        graph = Graph()
+        graph.add_vertex('A')
+        assert 'A' in graph.vertices()
 
-class TestGraphs(unittest.TestCase):
-    def setUp(self):
-        self.graph = WeightedGraph([(1, 2), (2, 3), (3, 4)])
-        self.graph.set_weight(1, 2, 10)
-        self.graph.set_weight(2, 3, 5)
-        self.graph.set_weight(3, 4, 1)
-
-    def test_vertices_and_edges(self):
-        self.assertIn(1, self.graph.vertices())
-        self.assertIn((1, 2), self.graph.edges())
-
-    def test_weights(self):
-        self.assertEqual(self.graph.get_weight(1, 2), 10)
-        self.assertEqual(self.graph.get_weight(2, 3), 5)
+    def test_edges(self):
+        """
+        Test adding and retrieving edges.
+        """
+        graph = Graph()
+        graph.add_edge('A', 'B')
+        assert ('A', 'B') in graph.edges()
 
     def test_dijkstra(self):
-        result = dijkstra(self.graph, 1, cost=lambda u, v: self.graph.get_weight(u, v))
-        self.assertEqual(result[4], [1, 2, 3, 4])
+        """
+        Test the Dijkstra shortest path implementation.
+        """
+        graph = WeightedGraph([('A', 'B', 1), ('B', 'C', 2)])
+        paths = dijkstra(graph, 'A')
+        assert paths['C'] == ['A', 'B', 'C']
+
 
 if __name__ == "__main__":
-    G = WeightedGraph([(1, 2), (2, 3), (3, 4)])
-    G.set_weight(1, 2, 10)
-    G.set_weight(2, 3, 5)
-    G.set_weight(3, 4, 1)
+    # Create an example graph for testing
+    graph = WeightedGraph([('A', 'B', 1), ('B', 'C', 2), ('A', 'C', 4)])
 
-    print("Shortest Paths:", dijkstra(G, 1, cost=lambda u, v: G.get_weight(u, v)))
+    # Test vertices and edges
+    print("Vertices:", graph.vertices())
+    print("Edges:", graph.edges())
 
-    view_shortest(G, 1, 4, cost=lambda u, v: G.get_weight(u, v))
+    # Test Dijkstra's algorithm
+    shortest_paths = dijkstra(graph, 'A')
+    print("Shortest paths from A:", shortest_paths)
 
+    # Visualize the graph with custom colors
+    node_colors = {'A': 'red', 'B': 'blue', 'C': 'green'}
+    edge_colors = {('A', 'B'): 'blue', ('B', 'C'): 'green'}
+    edge_labels = {('A', 'B'): '1', ('B', 'C'): '2', ('A', 'C'): '4'}
+    visualize(graph, nodecolors=node_colors, edgecolors=edge_colors, edgelabels=edge_labels)
